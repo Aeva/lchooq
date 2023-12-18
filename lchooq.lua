@@ -47,16 +47,16 @@ push_meshing_density(40)
 wheel = wheel_model:instance()
 swatch = swatch_model:instance()
 
-
 function as_angle(scalar, range)
 	return (scalar / range) * 360
 end
 
 function as_scalar(angle, range)
 	local angle = math.fmod(angle, 360)
-	if (angle < 0) then
+	if angle < 0 then
 		angle = angle + 360
 	end
+
 	return (angle / 360) * range
 end
 
@@ -114,18 +114,75 @@ shifters = {
 }
 current_shifter = #shifters
 
-function repaint(new_shift)
-	shifters[current_shifter](new_shift)
+function print_color()
+	color = oklch_color(color)
+	color.h = math.fmod(color.h, 360)
+	if color.h < 0 then
+		color.h = color.h + 360
+	end
+	local oklch_name = string.format("oklch(%f %f %f)", color.l, color.c, color.h)
+
+	local as_rgb = rgb_color(color)
+	function enhex(scalar)
+		local int, frac = math.modf(scalar * 0xFF)
+		if frac > 0.5 then
+			int = int + 1
+		end
+		int = math.min(math.max(int, 0), 0xFF)
+		if int > 0xF then
+			return string.format("%x", int)
+		else
+			return string.format("0%x", int)
+		end
+	end
+	local r = enhex(as_rgb.r)
+	local g = enhex(as_rgb.g)
+	local b = enhex(as_rgb.b)
+
+	local rgb_name = string.format("#%s%s%s", r, g, b)
+
+	print(string.format("   %s  <---->  %s", rgb_name, oklch_name))
 end
 
+function repaint(new_shift)
+	shifters[current_shifter](new_shift)
+	if not (new_shift == 0) then
+		print_color()
+	end
+end
 
+print("")
+print("+-------------------+")
+print("| L. C. H. O. O. Q. |")
+print("+-------------------+")
+print("")
+print("What is this?")
+print(" - This is a toy for exploring oklch color space.")
+print(" - The 'L' stands for Lightness.")
+print(" - The 'C' stands for Chroma.")
+print(" - The 'H' stands for Hue.")
+print(" - There are sometimes other letters.  Do not worry about these.")
+print("")
+print("Controls:")
+print(" - Press F1 to agree with various open source licenses, if you're into that sort of thing.")
+print(" - Press Ctrl and F at the same time to toggle fullscreen mode.")
+print(" - Press Ctrl and R at the same time to start over if you get stuck.")
+print(" - Hold Alt to see the secret debug menu.")
+print(" - Otherwise just click on stuff and see what happens.")
+print("")
+print("A word of caution:")
+print(" - Colors may change abruptly in response to clicking.  Rapid clicking may cause strobing.")
+print(" - Avoid clicking rapidly if you or other people near by are photosensitive.")
+print("")
+print("Now, please meditate on this color:")
+
+print_color()
 repaint(0)
 
 wheel:on_mouse_down(function (event)
 	local x = event.cursor.x
 	local z = event.cursor.z
 	local angle = (math.deg(math.atan(event.cursor.x, event.cursor.z)) + 180) or 0
-	print(angle)
 	repaint(angle)
 end)
 
