@@ -13,16 +13,20 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
-set_title("L. C. H. O. O. Q.")
-hide_debug_menu()
-
-set_fixed_camera(
-	0, -13, -1,
-	0, 0, -1,
-	0, 0, 1)
-
 color = css_color("tangerine")
 steps = 128
+fg_ramp = steps + 1
+bg_ramp = fg_ramp + 1
+
+ramps = {}
+blend_rate = {}
+for i=1, steps + 2, 1 do
+	table.insert(ramps, {ramp(color, color), 0.0, true})
+	table.insert(blend_rate, 1.0 / 200.0)
+end
+
+blend_rate[fg_ramp] = 1.0 / 200.0
+blend_rate[bg_ramp] = 1.0 / 800.0
 
 blob_material = solid_material(color)
 step_materials = {}
@@ -42,6 +46,41 @@ end
 local swatch_model = sphere(1.75)
 	:move_z(-3.6)
 	:paint(blob_material)
+
+function update_ramp(index, new_color)
+	local old_alpha = math.max(math.min(ramps[index][2], 1.0), 0.0)
+	local old_color = ramps[index][1]:eval(old_alpha)
+	ramps[index] = {ramp(old_color, new_color), 0.0, true}
+end
+
+function refresh_colors(dt)
+	-- seconds = dt / 1000.0
+	for r=1, #ramps, 1 do
+		local advance = dt * blend_rate[r]
+
+		if ramps[r][3] then
+			local alpha = math.max(math.min(ramps[r][2] + advance, 1.0), 0.0)
+			ramps[r][2] = alpha
+			local new_color = ramps[r][1]:eval(alpha)
+
+			if r <= #step_materials then
+				step_materials[r]:set_color(new_color)
+			elseif r == fg_ramp then
+				blob_material:set_color(new_color)
+			else
+				assert(r == bg_ramp)
+				set_bg(new_color)
+			end
+
+			if alpha == 1.0 then
+				ramps[r][3] = false
+			end
+		end
+	end
+end
+
+refresh_colors(0)
+
 
 push_meshing_density(40)
 wheel = wheel_model:instance()
@@ -68,12 +107,12 @@ function lightness_shift(new_shift)
 	color = oklch_color(color)
 	color = oklch_color(shift(color.l, new_shift), color.c, color.h)
 
-	set_bg(oklch_color(shift(color.l, 180), color.c, color.h))
-	blob_material:set_color(color)
+	update_ramp(bg_ramp, oklch_color(shift(color.l, 180), color.c, color.h))
+	update_ramp(fg_ramp, color)
 
 	for i=1, steps, 1 do
 		local angle = (360 / steps * (i-1))
-		step_materials[i]:set_color(oklch_color(shift(color.l, angle), color.c, color.h))
+		update_ramp(i, oklch_color(shift(color.l, angle), color.c, color.h))
 	end
 end
 
@@ -85,12 +124,12 @@ function chroma_shift(new_shift)
 	color = oklch_color(color)
 	color = oklch_color(color.l, shift(color.c, new_shift), color.h)
 
-	set_bg(oklch_color(color.l, shift(color.c, 180), color.h))
-	blob_material:set_color(color)
+	update_ramp(bg_ramp, oklch_color(color.l, shift(color.c, 180), color.h))
+	update_ramp(fg_ramp, color)
 
 	for i=1, steps, 1 do
 		local angle = (360 / steps * (i-1))
-		step_materials[i]:set_color(oklch_color(color.l, shift(color.c, angle), color.h))
+		update_ramp(i, oklch_color(color.l, shift(color.c, angle), color.h))
 	end
 end
 
@@ -98,12 +137,12 @@ function hue_shift(new_shift)
 	color = oklch_color(color)
 	color = oklch_color(color.l, color.c, color.h + new_shift)
 
-	set_bg(oklch_color(color.l, color.c, color.h + 180))
-	blob_material:set_color(color)
+	update_ramp(bg_ramp, oklch_color(color.l, color.c, color.h + 180))
+	update_ramp(fg_ramp, color)
 
 	for i=1, steps, 1 do
 		local angle = (360 / steps * (i-1))
-		step_materials[i]:set_color(oklch_color(color.l, color.c, color.h + angle))
+		update_ramp(i, oklch_color(color.l, color.c, color.h + angle))
 	end
 end
 
@@ -191,3 +230,7 @@ swatch:on_mouse_down(function (event)
 	repaint(0)
 end)
 
+set_advance_event(function (dt, elapsed)
+	-- seconds = dt / 1000.0
+	refresh_colors(dt)
+end)
